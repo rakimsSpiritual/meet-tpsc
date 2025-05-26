@@ -1,0 +1,640 @@
+    
+	<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TPSC Video Conference</title>
+  <script>
+    const ROOM_ID = "<%= roomId %>";
+    const IS_HOST = <%= isHost %>;
+  </script>
+
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;500;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css"/>
+  <link rel="stylesheet" href="/style.css"/>
+  <script defer src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+  <script src="/socket.io/socket.io.js" defer></script>
+  <script src="https://kit.fontawesome.com/c939d0e917.js"></script>
+  <script src="/script.js" defer></script>
+
+  <style>
+    body {
+      background-color: #0a192f;
+      color: #ccd6f6;
+      font-family: 'Roboto', sans-serif;
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .main {
+      display: flex;
+      height: calc(100vh - 30px);
+    }
+    .main__left {
+      flex: 3;
+      display: flex;
+      flex-direction: column;
+    }
+    .main__right {
+      flex: 1;
+      background-color: #112240;
+      display: flex;
+      flex-direction: column;
+      border-left: 1px solid #1f2937;
+    }
+    .main__videos {
+      flex: 1;
+      background-color: #0a192f;
+      padding: 10px;
+      overflow-y: auto;
+    }
+    #video-grid {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    video {
+      height: 300px;
+      width: 400px;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 2px solid #64ffda;
+      transition: all 0.3s ease;
+    }
+    .pinned {
+      border: 2px solid #ff5e5e;
+      box-shadow: 0 0 15px rgba(255, 94, 94, 0.5);
+    }
+    .muted {
+      border: 2px solid #ff9a3e;
+    }
+    .no-video {
+      border: 2px solid #a0a0a0;
+    }
+    .screen-sharing {
+      border: 2px solid #6a5acd;
+    }
+    .main__controls {
+      background: #112240;
+      padding: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid #1f2937;
+    }
+    .main__controls__block {
+      display: flex;
+      gap: 15px;
+    }
+    .main__controls__button {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      padding: 10px;
+      background: #0a192f;
+      border-radius: 5px;
+      transition: background 0.3s ease;
+    }
+    .main__controls__button:hover {
+      background: #1f2937;
+    }
+    .main__controls__button.active {
+      background: #1f2937;
+    }
+    .main__controls__button.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .main__header {
+      background: #1f2937;
+      padding: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #112240;
+    }
+    .main__chat_window {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+    }
+    .main__message_container {
+      display: flex;
+      padding: 10px;
+      border-top: 1px solid #1f2937;
+    }
+    #chat_message {
+      flex: 1;
+      padding: 10px;
+      border-radius: 5px;
+      border: none;
+      background: #0a192f;
+      color: #ccd6f6;
+    }
+    #info-bar {
+      background: #1f2937;
+      padding: 5px 15px;
+      font-size: 14px;
+      display: flex;
+      justify-content: space-between;
+      color: #64ffda;
+      height: 30px;
+    }
+    #typewriter {
+      font-weight: 500;
+      font-size: 18px;
+      color: #64ffda;
+      white-space: nowrap;
+      overflow: hidden;
+      border-right: 2px solid #64ffda;
+      width: 100%;
+    }
+    .participant-info {
+      position: absolute;
+      bottom: 15px;
+      left: 15px;
+      background: rgba(0,0,0,0.7);
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 12px;
+    }
+    .video-container {
+      position: relative;
+      margin: 8px;
+    }
+    .host-badge {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #64ffda;
+      color: #0a192f;
+      padding: 2px 5px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: bold;
+    }
+    .raise-hand {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 0, 0.7);
+      padding: 2px 5px;
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+    .action-menu {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0,0,0,0.7);
+      border-radius: 5px;
+      display: none;
+    }
+    .video-container:hover .action-menu {
+      display: block;
+    }
+    .action-menu button {
+      display: block;
+      width: 100%;
+      background: transparent;
+      border: none;
+      color: white;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+    .action-menu button:hover {
+      background: rgba(255,255,255,0.2);
+    }
+    .recording-indicator {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #ff5e5e;
+      color: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      display: none;
+      z-index: 100;
+    }
+    .participants-list {
+      padding: 10px;
+      max-height: 100%;
+      overflow-y: auto;
+    }
+    .participant-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #1f2937;
+    }
+    .participant-controls button {
+      background: transparent;
+      border: none;
+      color: #64ffda;
+      cursor: pointer;
+      margin-left: 5px;
+    }
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.8);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      display: none;
+    }
+    .modal-content {
+      background: #112240;
+      padding: 20px;
+      border-radius: 10px;
+      width: 400px;
+      max-width: 90%;
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 20px;
+      gap: 10px;
+    }
+    .modal-actions button {
+      padding: 8px 15px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .modal-actions .confirm {
+      background: #64ffda;
+      color: #0a192f;
+    }
+    .modal-actions .cancel {
+      background: #1f2937;
+      color: white;
+    }
+    .tabs {
+      display: flex;
+      gap: 10px;
+    }
+    .tab-button {
+      background: transparent;
+      border: none;
+      color: #ccd6f6;
+      cursor: pointer;
+      padding: 5px 10px;
+      border-radius: 5px;
+    }
+    .tab-button.active {
+      background: #0a192f;
+    }
+    .messages {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .message {
+      padding: 8px 0;
+      border-bottom: 1px solid #1f2937;
+    }
+    .message-time {
+      font-size: 12px;
+      color: #64ffda;
+      margin-left: 10px;
+    }
+    .notification {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #112240;
+      color: #64ff
+	padding: 10px 20px;
+    border-radius: 5px;
+    border-left: 4px solid #64ffda;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    z-index: 1000;
+    animation: slideIn 0.3s ease-out;
+  }
+  @keyframes slideIn {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+  .files-list {
+    padding: 10px;
+    overflow-y: auto;
+  }
+  .file-upload {
+    padding: 10px;
+    text-align: center;
+  }
+  .file-upload button {
+    background: #0a192f;
+    color: #64ffda;
+    border: 1px dashed #64ffda;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  .file-upload button:hover {
+    background: #1f2937;
+  }
+  .file-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #1f2937;
+  }
+  .file-icon {
+    color: #64ffda;
+    margin-right: 10px;
+  }
+  .file-download {
+    color: #64ffda;
+    cursor: pointer;
+  }
+  .self-video video {
+    transform: scaleX(-1); /* Mirror effect for self video */
+  }
+  </style>
+</head>
+<body>
+  <div id="info-bar">
+    <div id="typewriter"></div>
+    <div>
+      <span id="ip"></span> | <span id="location"></span> | <span id="time"></span>
+    </div>
+  </div>
+
+  <div class="recording-indicator" id="recordingIndicator">
+    <i class="fas fa-circle"></i> Recording
+  </div>
+
+  <div class="main">
+    <div class="main__left">
+      <div class="main__videos">
+        <div id="video-grid"></div>
+      </div>
+      <div class="main__controls">
+        <div class="main__controls__block">
+          <div onclick="muteUnmute()" class="main__controls__button" id="muteButton">
+            <i class="fas fa-microphone"></i><span>Mute</span>
+          </div>
+          <div onclick="playStop()" class="main__controls__button" id="videoButton">
+            <i class="fas fa-video"></i><span>Stop Video</span>
+          </div>
+          <div onclick="shareScreen()" class="main__controls__button" id="screenShareButton">
+            <i class="fas fa-desktop"></i><span>Share Screen</span>
+          </div>
+          <div onclick="toggleRaiseHand()" class="main__controls__button" id="raiseHandButton">
+            <i class="fas fa-hand-paper"></i><span>Raise Hand</span>
+          </div>
+        </div>
+        <div class="main__controls__block">
+          <div onclick="startRecording()" class="main__controls__button" id="recordButton">
+            <i class="fas fa-record-vinyl"></i><span>Record</span>
+          </div>
+          <div onclick="toggleParticipants()" class="main__controls__button" id="participantsButton">
+            <i class="fas fa-users"></i><span>Participants</span>
+          </div>
+          <div onclick="openSettings()" class="main__controls__button">
+            <i class="fas fa-cog"></i><span>Settings</span>
+          </div>
+        </div>
+        <div class="main__controls__block">
+          <div class="main__controls__button" onclick="leaveMeeting()">
+            <span class="leave_meeting text-danger">Leave Meeting</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="main__right">
+      <div class="main__header">
+        <h6>Chat</h6>
+        <div class="tabs">
+          <button class="tab-button active" onclick="switchTab('chat')">Chat</button>
+          <button class="tab-button" onclick="switchTab('participants')">Participants</button>
+          <button class="tab-button" onclick="switchTab('files')">Files</button>
+        </div>
+      </div>
+      <div class="main__chat_window" id="chatTab">
+        <ul class="messages"></ul>
+      </div>
+      <div class="participants-list" id="participantsTab" style="display:none;">
+        <!-- Participants list will be populated dynamically -->
+      </div>
+      <div class="files-list" id="filesTab" style="display:none;">
+        <div class="file-upload">
+          <input type="file" id="fileInput" style="display:none;">
+          <button onclick="document.getElementById('fileInput').click()">
+            <i class="fas fa-cloud-upload-alt"></i> Upload File
+          </button>
+        </div>
+        <div id="filesContainer">
+          <!-- Files will be listed here -->
+        </div>
+      </div>
+      <div class="main__message_container">
+        <input id="chat_message" type="text" placeholder="Type message here..." />
+        <button onclick="sendMessage()" class="send-button">
+          <i class="fas fa-paper-plane"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modals -->
+  <div class="modal-overlay" id="confirmLeaveModal">
+    <div class="modal-content">
+      <h3>Leave Meeting?</h3>
+      <p>Are you sure you want to leave the meeting?</p>
+      <div class="modal-actions">
+        <button class="cancel" onclick="document.getElementById('confirmLeaveModal').style.display='none'">Cancel</button>
+        <button class="confirm" onclick="confirmLeave()">Leave</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="hostControlsModal">
+    <div class="modal-content">
+      <h3>Participant Controls</h3>
+      <div id="participantControlsContent">
+        <!-- Content will be populated dynamically -->
+      </div>
+      <div class="modal-actions">
+        <button class="cancel" onclick="document.getElementById('hostControlsModal').style.display='none'">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal-content">
+      <h3>Settings</h3>
+      <div class="settings-option">
+        <label for="videoQuality">Video Quality:</label>
+        <select id="videoQuality">
+          <option value="high">High</option>
+          <option value="medium" selected>Medium</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
+      <div class="settings-option">
+        <label for="audioInput">Audio Input:</label>
+        <select id="audioInput"></select>
+      </div>
+      <div class="settings-option">
+        <label for="videoInput">Video Input:</label>
+        <select id="videoInput"></select>
+      </div>
+      <div class="modal-actions">
+        <button class="cancel" onclick="document.getElementById('settingsModal').style.display='none'">Cancel</button>
+        <button class="confirm" onclick="saveSettings()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Typewriter effect
+    const phrases = ["Welcome to TPSC Video Conference", "Connecting Tanzania", "Secure. Reliable. Simple."];
+    let i = 0, j = 0, currentPhrase = [], isDeleting = false, isEnd = false;
+
+    function loop() {
+      document.getElementById("typewriter").innerHTML = currentPhrase.join("");
+      if (i < phrases.length) {
+        if (!isDeleting && j <= phrases[i].length) {
+          currentPhrase.push(phrases[i][j]);
+          j++;
+          document.getElementById("typewriter").innerHTML = currentPhrase.join("");
+        }
+
+        if (isDeleting && j <= phrases[i].length) {
+          currentPhrase.pop();
+          j--;
+          document.getElementById("typewriter").innerHTML = currentPhrase.join("");
+        }
+
+        if (j == phrases[i].length) {
+          isEnd = true;
+          isDeleting = true;
+        }
+
+        if (isDeleting && j === 0) {
+          currentPhrase = [];
+          isDeleting = false;
+          i++;
+          if (i === phrases.length) {
+            i = 0;
+          }
+        }
+      }
+      const speedUp = Math.random() * (80 - 50) + 50;
+      const normalSpeed = Math.random() * (200 - 100) + 100;
+      const time = isEnd ? 1500 : isDeleting ? speedUp : normalSpeed;
+      setTimeout(loop, time);
+    }
+
+    loop();
+
+    // Time Display
+    setInterval(() => {
+      const now = new Date();
+      document.getElementById("time").textContent = now.toLocaleTimeString();
+    }, 1000);
+
+    // IP + Location
+    fetch("https://ipapi.co/json/")
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById("ip").textContent = `IP: ${data.ip}`;
+        document.getElementById("location").textContent = `${data.city}, ${data.country_name}`;
+      })
+      .catch(() => {
+        document.getElementById("ip").textContent = `IP: Unknown`;
+        document.getElementById("location").textContent = `Location: Unknown`;
+      });
+
+    // File upload handling
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        // In a real app, you would upload the file to your server here
+        const fileItem = document.createElement('div');
+        fileItem.className = 'file-item';
+        fileItem.innerHTML = `
+          <div>
+            <i class="fas fa-file file-icon"></i>
+            ${file.name} (${(file.size / 1024).toFixed(2)} KB)
+          </div>
+          <div>
+            <i class="fas fa-download file-download"></i>
+          </div>
+        `;
+        document.getElementById('filesContainer').appendChild(fileItem);
+      }
+    });
+
+    // Settings functions
+    function openSettings() {
+      // Populate device lists
+      navigator.mediaDevices.enumerateDevices()
+        .then(devices => {
+          const audioInput = document.getElementById('audioInput');
+          const videoInput = document.getElementById('videoInput');
+          
+          audioInput.innerHTML = '';
+          videoInput.innerHTML = '';
+          
+          devices.forEach(device => {
+            if (device.kind === 'audioinput') {
+              const option = document.createElement('option');
+              option.value = device.deviceId;
+              option.text = device.label || `Microphone ${audioInput.length + 1}`;
+              audioInput.appendChild(option);
+            } else if (device.kind === 'videoinput') {
+              const option = document.createElement('option');
+              option.value = device.deviceId;
+              option.text = device.label || `Camera ${videoInput.length + 1}`;
+              videoInput.appendChild(option);
+            }
+          });
+        });
+      
+      document.getElementById('settingsModal').style.display = 'flex';
+    }
+
+    function saveSettings() {
+      const videoQuality = document.getElementById('videoQuality').value;
+      const audioInput = document.getElementById('audioInput').value;
+      const videoInput = document.getElementById('videoInput').value;
+      
+      // In a real app, you would apply these settings to the media streams
+      console.log('Settings saved:', { videoQuality, audioInput, videoInput });
+      
+      document.getElementById('settingsModal').style.display = 'none';
+      showNotification('Settings saved successfully');
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      // Focus chat input when typing starts
+      if (e.key !== 'Control' && e.key !== 'Alt' && e.key !== 'Meta' && e.key !== 'Shift') {
+        if (document.activeElement !== chatMessageInput) {
+          chatMessageInput.focus();
+        }
+      }
+    });
+  </script>
+</body>
+</html>
